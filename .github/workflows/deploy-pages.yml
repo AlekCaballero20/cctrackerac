@@ -1,0 +1,54 @@
+name: Deploy CC Tracker to GitHub Pages
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Prepare static site
+        shell: bash
+        env:
+          CC_FIREBASE_API_KEY: ${{ secrets.CC_FIREBASE_API_KEY }}
+          CC_FIREBASE_AUTH_DOMAIN: ${{ secrets.CC_FIREBASE_AUTH_DOMAIN }}
+          CC_FIREBASE_PROJECT_ID: ${{ secrets.CC_FIREBASE_PROJECT_ID }}
+          CC_FIREBASE_STORAGE_BUCKET: ${{ secrets.CC_FIREBASE_STORAGE_BUCKET }}
+          CC_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.CC_FIREBASE_MESSAGING_SENDER_ID }}
+          CC_FIREBASE_APP_ID: ${{ secrets.CC_FIREBASE_APP_ID }}
+          CC_ALLOWED_EMAILS: ${{ secrets.CC_ALLOWED_EMAILS }}
+          CC_APPS_SCRIPT_URL: ${{ secrets.CC_APPS_SCRIPT_URL }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          rsync -av --exclude='.git' --exclude='.github' --exclude='apps_script' --exclude='*.md' ./ dist/
+          python3 .github/scripts/generate-config.py dist/js/firebase.config.js
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./dist
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
