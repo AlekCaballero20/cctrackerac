@@ -1,0 +1,650 @@
+<!doctype html>
+<html lang="es-CO">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="color-scheme" content="light" />
+  <meta name="theme-color" content="#f8f9fc" />
+
+  <title>CC Tracker · Musicala</title>
+  <meta
+    name="description"
+    content="Seguimiento de compras, cuotas, intereses y pagos de tarjetas de crédito. Visual, claro y usable desde escritorio o celular."
+  />
+  <meta name="robots" content="noindex,nofollow" />
+
+  <meta property="og:title" content="CC Tracker · Musicala" />
+  <meta
+    property="og:description"
+    content="Seguimiento de compras, cuotas, intereses y pagos. Visual, claro y móvil."
+  />
+  <meta property="og:type" content="website" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+
+<body class="auth-pending">
+  <a class="skipLink" href="#main">Saltar al contenido</a>
+
+  <header class="topbar" role="banner">
+    <div class="brand" aria-label="Marca">
+      <div class="logo" aria-hidden="true">💳</div>
+      <div class="brandText">
+        <div class="title">CC Tracker</div>
+        <div class="subtitle">Compras, cuotas e intereses sin improvisar tanto.</div>
+      </div>
+    </div>
+
+    <div class="right" aria-label="Acciones principales">
+      <div
+        class="statusChip"
+        id="backendStatus"
+        role="status"
+        aria-live="polite"
+        title="Estado actual de conexión"
+      >
+        Verificando conexión…
+      </div>
+
+      <button
+        class="btn ghost"
+        id="btnSync"
+        type="button"
+        title="Actualizar datos"
+        aria-label="Sincronizar datos"
+      >
+        Sincronizar
+      </button>
+
+      <button
+        class="btn"
+        id="btnOpenConfig"
+        type="button"
+        aria-haspopup="dialog"
+        aria-controls="modalConfig"
+        title="Configurar intereses por defecto"
+      >
+        Configuración
+      </button>
+    </div>
+  </header>
+
+  <main class="container" id="main" role="main" tabindex="-1">
+    <section class="panel introPanel" aria-label="Resumen de la herramienta">
+      <div class="panelHeader">
+        <div>
+          <div class="h2">Panel de seguimiento</div>
+          <div class="muted">
+            Revisa cuotas del mes, histórico, pendientes e intereses sin tener que adivinar dónde quedó cada cosa.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" aria-label="Filtros y resumen">
+      <div class="row">
+        <div class="field">
+          <label for="mesSelect">Mes</label>
+          <input type="month" id="mesSelect" autocomplete="off" />
+        </div>
+
+        <div class="field">
+          <label for="tarjetaSelect">Tarjeta</label>
+          <select id="tarjetaSelect" aria-label="Seleccionar tarjeta"></select>
+        </div>
+
+        <div class="field small">
+          <label class="srOnly" for="btnNuevaCompra">Nueva compra</label>
+          <button
+            class="btn"
+            id="btnNuevaCompra"
+            type="button"
+            aria-haspopup="dialog"
+            aria-controls="modalCompra"
+          >
+            + Nueva compra
+          </button>
+        </div>
+      </div>
+
+      <div class="stats" aria-label="Indicadores principales">
+        <article class="card" aria-label="Comprado este mes">
+          <div class="cardLabel">Comprado este mes</div>
+          <div class="cardValue" id="statBoughtMonth">—</div>
+          <div class="cardHint">Compras creadas en el periodo</div>
+        </article>
+
+        <article class="card" aria-label="A pagar este mes">
+          <div class="cardLabel">A pagar este mes</div>
+          <div class="cardValue" id="statMes">—</div>
+          <div class="cardHint" id="statMesHint">Cuotas pendientes del mes</div>
+        </article>
+
+        <article class="card" aria-label="Pendiente total">
+          <div class="cardLabel">Pendiente total</div>
+          <div class="cardValue" id="statTotal">—</div>
+          <div class="cardHint">Todas las cuotas pendientes</div>
+        </article>
+
+        <article class="card" aria-label="Cuotas pendientes">
+          <div class="cardLabel">Cuotas pendientes</div>
+          <div class="cardValue" id="statCount">—</div>
+          <div class="cardHint">Cantidad de cuotas sin pagar</div>
+        </article>
+
+        <article class="card" aria-label="Pagado este mes">
+          <div class="cardLabel">Pagado este mes</div>
+          <div class="cardValue" id="statPaidMonthTop">—</div>
+          <div class="cardHint">Pagos registrados en el mes</div>
+        </article>
+
+        <article class="card" aria-label="Pendiente este mes">
+          <div class="cardLabel">Pendiente este mes</div>
+          <div class="cardValue" id="statPendingMonth">—</div>
+          <div class="cardHint">Cuotas del mes sin pagar</div>
+        </article>
+
+        <article class="card" aria-label="Movimientos Gmail pendientes">
+          <div class="cardLabel">Gmail pendientes</div>
+          <div class="cardValue" id="statGmailPendingTop">—</div>
+          <div class="cardHint">Detectados o por revisar</div>
+        </article>
+      </div>
+    </section>
+
+    <section class="panel" aria-label="Compras del mes">
+      <div class="panelHeader">
+        <div>
+          <div class="h2">Compras del mes</div>
+          <div class="muted" id="comprasHint">Compras manuales y confirmadas desde Gmail.</div>
+        </div>
+      </div>
+      <div class="tableWrap" aria-label="Tabla de compras del mes">
+        <table class="table">
+          <thead>
+            <tr>
+              <th scope="col">Fecha</th>
+              <th scope="col">Comercio</th>
+              <th scope="col" class="hideSm">Tarjeta</th>
+              <th scope="col">Valor</th>
+              <th scope="col">Cuotas</th>
+              <th scope="col">Estado</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyComprasMes"></tbody>
+        </table>
+      </div>
+      <div class="empty" id="emptyComprasMes" style="display:none;" role="status">No hay compras creadas para este mes.</div>
+    </section>
+
+    <section class="panel" aria-label="Movimientos detectados desde Gmail">
+      <div class="panelHeader">
+        <div>
+          <div class="h2">Movimientos detectados</div>
+          <div class="muted" id="movHint" aria-live="polite">
+            Compras encontradas en Gmail pendientes por confirmar. El robot lee, ustedes deciden. Civilización.
+          </div>
+        </div>
+
+        <div class="tools" aria-label="Filtros de movimientos detectados">
+          <label class="srOnly" for="movEstado">Estado del movimiento</label>
+          <select class="search compactSelect" id="movEstado" aria-label="Estado del movimiento">
+            <option value="pendientes" selected>Pendientes</option>
+            <option value="detectado">Detectados</option>
+            <option value="revisar">Por revisar</option>
+            <option value="confirmado">Confirmados</option>
+            <option value="descartado">Descartados</option>
+            <option value="todos">Todos</option>
+          </select>
+
+          <label class="srOnly" for="movSearch">Buscar movimiento</label>
+          <input
+            class="search"
+            id="movSearch"
+            type="search"
+            placeholder="Buscar banco, comercio, valor o tarjeta"
+            autocomplete="off"
+            inputmode="search"
+          />
+        </div>
+      </div>
+
+      <div class="stats stats2" aria-label="Indicadores de movimientos detectados">
+        <article class="card" aria-label="Movimientos pendientes">
+          <div class="cardLabel">Movimientos pendientes</div>
+          <div class="cardValue" id="statMovCount">—</div>
+          <div class="cardHint">Detectados o por revisar</div>
+        </article>
+
+        <article class="card" aria-label="Valor pendiente por confirmar">
+          <div class="cardLabel">Valor por confirmar</div>
+          <div class="cardValue" id="statMovValue">—</div>
+          <div class="cardHint">Suma de movimientos pendientes</div>
+        </article>
+
+        <article class="card" aria-label="Movimientos por revisar">
+          <div class="cardLabel">Por revisar</div>
+          <div class="cardValue" id="statMovReview">—</div>
+          <div class="cardHint">Sin tarjeta detectada u otro dato dudoso</div>
+        </article>
+      </div>
+
+      <div class="tableWrap" aria-label="Tabla de movimientos detectados">
+        <table class="table" id="tablaMovimientos" aria-describedby="movHint">
+          <thead>
+            <tr>
+              <th scope="col">Movimiento</th>
+              <th scope="col" class="hideSm">Tarjeta</th>
+              <th scope="col">Valor</th>
+              <th scope="col">Estado</th>
+              <th scope="col">Acción</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyMovimientos"></tbody>
+        </table>
+      </div>
+
+      <div class="cardsWrap" id="cardsMovimientos" aria-label="Vista móvil de movimientos detectados"></div>
+
+      <div
+        class="empty"
+        id="emptyMovimientos"
+        style="display:none;"
+        role="status"
+        aria-live="polite"
+      >
+        No hay movimientos detectados con este filtro. Qué momento tan raro: el banco descansando.
+      </div>
+    </section>
+
+
+    <section class="panel" aria-label="Listado de cuotas">
+      <div class="panelHeader">
+        <div>
+          <div class="h2" id="sectionTitle">Cuotas del periodo</div>
+          <div class="muted" id="listHint" aria-live="polite">—</div>
+        </div>
+
+        <div class="tools" aria-label="Herramientas del listado">
+          <label class="srOnly" for="search">Buscar en cuotas</label>
+          <input
+            class="search"
+            id="search"
+            type="search"
+            placeholder="Buscar por descripción, categoría o tarjeta"
+            autocomplete="off"
+            inputmode="search"
+          />
+        </div>
+      </div>
+
+      <div class="tableWrap" aria-label="Tabla de cuotas">
+        <table class="table" id="tablaCuotas" aria-describedby="listHint">
+          <thead>
+            <tr>
+              <th scope="col">Compra</th>
+              <th scope="col" class="hideSm">Categoría</th>
+              <th scope="col" class="hideSm">Cuota</th>
+              <th scope="col">Valor</th>
+              <th scope="col">Estado</th>
+              <th scope="col">Acción</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyCuotas"></tbody>
+        </table>
+      </div>
+
+      <div class="cardsWrap" id="cardsCuotas" aria-label="Vista móvil de cuotas"></div>
+
+      <div
+        class="empty"
+        id="emptyState"
+        style="display:none;"
+        role="status"
+        aria-live="polite"
+      >
+        No hay cuotas para este filtro. Qué dicha por una vez. 🧘
+      </div>
+    </section>
+
+    <section class="panel" aria-label="Histórico y estadísticas">
+      <div class="panelHeader">
+        <div>
+          <div class="h2">Histórico y estadísticas</div>
+          <div class="muted">
+            Para ver cómo se mueve la deuda en el tiempo y no solo sufrir con el mes actual.
+          </div>
+        </div>
+
+        <div class="tools" aria-label="Herramientas del histórico">
+          <button
+            class="smallBtn"
+            id="btnExportDemo"
+            type="button"
+            title="Exportar listado visible a CSV"
+          >
+            Exportar CSV
+          </button>
+        </div>
+      </div>
+
+      <div class="stats stats2" aria-label="Indicadores del histórico">
+        <article class="card" aria-label="Pagado en el mes">
+          <div class="cardLabel">Pagado en el mes</div>
+          <div class="cardValue" id="statPaidMonth">—</div>
+          <div class="cardHint" id="statPaidMonthHint">Cuotas pagadas por FechaPago</div>
+        </article>
+
+        <article class="card" aria-label="Intereses del mes">
+          <div class="cardLabel">Intereses del mes</div>
+          <div class="cardValue" id="statInterestMonth">—</div>
+          <div class="cardHint">Suma de intereses pagados en el mes</div>
+        </article>
+
+        <article class="card" aria-label="Próximo golpe">
+          <div class="cardLabel">Próximo golpe</div>
+          <div class="cardValue" id="statNextHit">—</div>
+          <div class="cardHint" id="statNextHitHint">Mayor cuota pendiente del mes</div>
+        </article>
+      </div>
+
+      <div class="grid2" aria-label="Resumen y rankings">
+        <section class="subpanel" aria-label="Resumen de últimos meses">
+          <div class="subhead">
+            <div>
+              <div class="subttl">Resumen últimos meses</div>
+              <div class="muted">Pagado vs interés vs pendiente</div>
+            </div>
+            <div class="muted" id="historyHint">Últimos 12 meses</div>
+          </div>
+          <div class="history" id="history"></div>
+        </section>
+
+        <section class="subpanel" aria-label="Rankings">
+          <div class="subhead">
+            <div>
+              <div class="subttl">Top categorías</div>
+              <div class="muted">Por valor acumulado de cuotas</div>
+            </div>
+          </div>
+          <div class="rank" id="topCats"></div>
+
+          <div class="subhead" style="margin-top:12px;">
+            <div>
+              <div class="subttl">Top tarjetas</div>
+              <div class="muted">Pendiente total por tarjeta</div>
+            </div>
+          </div>
+          <div class="rank" id="topCards"></div>
+        </section>
+      </div>
+
+      <div
+        class="empty"
+        id="historyEmpty"
+        style="display:none;"
+        role="status"
+        aria-live="polite"
+      >
+        Aún no hay historial suficiente. Primero hay que usar la app, insólitamente. 📈
+      </div>
+    </section>
+  </main>
+
+  <!-- Modal Configuración -->
+  <div
+    class="modal"
+    id="modalConfig"
+    aria-hidden="true"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="configTitle"
+  >
+    <div class="modalCard" role="document">
+      <div class="modalHeader">
+        <div>
+          <div class="h2" id="configTitle">Configuración</div>
+          <div class="muted">
+            Define intereses por defecto para que crear compras no sea repetir la misma vaina cada vez.
+          </div>
+        </div>
+
+        <button
+          class="iconBtn"
+          id="btnCerrarConfig"
+          type="button"
+          aria-label="Cerrar configuración"
+        >
+          ✕
+        </button>
+      </div>
+
+      <form id="formConfig" class="formGrid" novalidate>
+        <div class="field span2">
+          <label for="cfgInteresGlobal">Interés global por defecto (%)</label>
+          <input
+            type="number"
+            id="cfgInteresGlobal"
+            min="0"
+            step="0.01"
+            placeholder="Ej: 2.60"
+            inputmode="decimal"
+            autocomplete="off"
+          />
+          <div class="muted" style="margin-top:6px;">
+            Se usa cuando una tarjeta no tenga interés propio configurado.
+          </div>
+        </div>
+
+        <div class="field span2">
+          <label>Interés por tarjeta (%)</label>
+          <div class="muted" style="margin-top:6px;">
+            Esto sobreescribe el interés global para nuevas compras hechas con esa tarjeta.
+          </div>
+          <div
+            id="cfgTarjetasList"
+            class="cfgList"
+            aria-label="Lista de tarjetas para configurar interés"
+          ></div>
+        </div>
+
+        <section class="span2 subpanel" aria-label="Diagnóstico Gmail">
+          <div class="subhead">
+            <div>
+              <div class="subttl">Estado de sincronización Gmail</div>
+              <div class="muted">Gmail se sincroniza desde Apps Script, manualmente o por trigger.</div>
+            </div>
+          </div>
+          <div class="diagnosticGrid" id="gmailSyncStatus">
+            <div class="muted">Sin diagnóstico cargado todavía.</div>
+          </div>
+        </section>
+
+        <div class="actions span2">
+          <button type="button" class="btn ghost" id="btnResetConfig">Restaurar</button>
+          <button type="submit" class="btn" id="btnGuardarConfig">Guardar configuración</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal Nueva Compra -->
+  <div
+    class="modal"
+    id="modalCompra"
+    aria-hidden="true"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="modalTitle"
+  >
+    <div class="modalCard" role="document">
+      <div class="modalHeader">
+        <div>
+          <div class="h2" id="modalTitle">Nueva compra</div>
+          <div class="muted">
+            Se crearán automáticamente las cuotas y el interés si corresponde.
+          </div>
+        </div>
+
+        <button
+          class="iconBtn"
+          id="btnCerrarModal"
+          type="button"
+          aria-label="Cerrar formulario de compra"
+        >
+          ✕
+        </button>
+      </div>
+
+      <form id="formCompra" class="formGrid" novalidate>
+        <div class="field">
+          <label for="formTarjeta">Tarjeta</label>
+          <select id="formTarjeta" required></select>
+        </div>
+
+        <div class="field">
+          <label for="fechaCompra">Fecha compra</label>
+          <input type="date" id="fechaCompra" required />
+        </div>
+
+        <div class="field span2">
+          <label for="descripcion">Descripción</label>
+          <input
+            type="text"
+            id="descripcion"
+            placeholder="Ej: Mercado, Amazon, Uber..."
+            required
+            maxlength="80"
+            autocomplete="off"
+          />
+        </div>
+
+        <div class="field">
+          <label for="categoria">Categoría</label>
+          <input
+            type="text"
+            id="categoria"
+            placeholder="Ej: Comida, Transporte, Tecnología"
+            required
+            maxlength="40"
+            autocomplete="off"
+          />
+        </div>
+
+        <div class="field">
+          <label for="total">Total (COP)</label>
+          <input
+            type="number"
+            id="total"
+            min="0"
+            step="1"
+            inputmode="numeric"
+            required
+            autocomplete="off"
+          />
+        </div>
+
+        <div class="field">
+          <label for="cuotas">Cuotas</label>
+          <input
+            type="number"
+            id="cuotas"
+            min="1"
+            step="1"
+            value="1"
+            inputmode="numeric"
+            required
+            autocomplete="off"
+          />
+        </div>
+
+        <div class="field">
+          <label for="mesInicio">Mes inicio</label>
+          <input type="month" id="mesInicio" required />
+        </div>
+
+        <div class="field">
+          <label for="interesMensual">Interés mensual (%)</label>
+          <input
+            type="number"
+            id="interesMensual"
+            min="0"
+            step="0.01"
+            placeholder="Ej: 2.6"
+            inputmode="decimal"
+            autocomplete="off"
+          />
+          <div class="muted" style="margin-top:6px;">
+            Si está en “Auto” y lo dejas vacío, se usará la configuración de la tarjeta.
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="aplicarInteres">Aplicar interés</label>
+          <select id="aplicarInteres" aria-label="Aplicar interés">
+            <option value="auto" selected>Auto (según tarjeta)</option>
+            <option value="si">Sí, manual</option>
+            <option value="no">No</option>
+          </select>
+        </div>
+
+        <div class="field span2">
+          <label for="nota">Nota (opcional)</label>
+          <input
+            type="text"
+            id="nota"
+            placeholder="Ej: promoción, diferido, compra familiar, etc."
+            maxlength="120"
+            autocomplete="off"
+          />
+        </div>
+
+        <div class="actions span2">
+          <button type="button" class="btn ghost" id="btnCancelar">Cancelar</button>
+          <button type="submit" class="btn" id="btnGuardar">Guardar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div
+    class="toast"
+    id="toast"
+    aria-live="polite"
+    aria-atomic="true"
+    style="display:none;"
+  >
+    <div class="toastInner">
+      <span class="toastIcon" aria-hidden="true">✅</span>
+      <span class="toastText" id="toastText">Listo.</span>
+      <button class="toastClose" id="toastClose" type="button" aria-label="Cerrar mensaje">
+        ✕
+      </button>
+    </div>
+  </div>
+
+  <!-- Loader -->
+  <div class="loader" id="loader" aria-hidden="true" style="display:none;">
+    <div class="spinner" aria-hidden="true"></div>
+    <div class="muted">Cargando…</div>
+  </div>
+
+  <noscript>
+    <div class="panel" style="margin:16px;">
+      Esta app necesita JavaScript para funcionar. Triste, pero cierto.
+    </div>
+  </noscript>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js" defer></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js" defer></script>
+  <script src="./js/firebase.config.js" defer></script>
+  <script src="./js/auth.js" defer></script>
+  <script src="./js/utils.js" defer></script>
+  <script src="./js/api.js" defer></script>
+  <script src="./js/app.js" defer></script>
+</body>
+</html>
