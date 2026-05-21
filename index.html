@@ -172,6 +172,7 @@
               <th scope="col">Valor</th>
               <th scope="col">Cuotas</th>
               <th scope="col">Estado</th>
+              <th scope="col">Acciones</th>
             </tr>
           </thead>
           <tbody id="tbodyComprasMes"></tbody>
@@ -322,7 +323,7 @@
         <div class="tools" aria-label="Herramientas del histórico">
           <button
             class="smallBtn"
-            id="btnExportDemo"
+            id="btnExportCsv"
             type="button"
             title="Exportar listado visible a CSV"
           >
@@ -527,11 +528,13 @@
           <input
             type="text"
             id="categoria"
+            list="categoriasCompra"
             placeholder="Ej: Comida, Transporte, Tecnología"
             required
             maxlength="40"
             autocomplete="off"
           />
+          <datalist id="categoriasCompra"></datalist>
         </div>
 
         <div class="field">
