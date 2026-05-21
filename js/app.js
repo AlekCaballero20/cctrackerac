@@ -92,6 +92,53 @@
     ].join("\n");
   });
 
+  const CATEGORIAS_COMPRA = [
+    "Mercado / Supermercado",
+    "Restaurantes / Comida",
+    "Transporte",
+    "Gasolina / Moto / Carro",
+    "Tecnología",
+    "Hogar",
+    "Salud",
+    "Educación",
+    "Entretenimiento",
+    "Ropa",
+    "Suscripciones",
+    "Servicios",
+    "Viajes",
+    "Mascotas",
+    "Impuestos / Trámites",
+    "Otros",
+    "Por clasificar"
+  ];
+
+  const CATEGORY_RULES = [
+    ["Mercado / Supermercado", ["exito", "éxito", "d1", "ara", "jumbo", "olimpica", "olímpica", "carulla", "supermercado"]],
+    ["Restaurantes / Comida", ["rappi", "ifood", "restaurante", "burger", "pizza", "cafe", "café", "dominos", "kfc", "mcdonalds"]],
+    ["Transporte", ["uber", "didi", "cabify", "taxi", "transmilenio", "sitp"]],
+    ["Gasolina / Moto / Carro", ["terpel", "primax", "texaco", "gasolina", "parqueadero"]],
+    ["Tecnología", ["alkosto", "ktronix", "amazon", "mercadolibre", "mercado libre", "apple", "google", "microsoft"]],
+    ["Suscripciones", ["netflix", "spotify", "disney", "prime", "hbo", "youtube"]],
+    ["Salud", ["cruz verde", "drogueria", "droguería", "farmacia", "eps", "salud"]],
+    ["Mascotas", ["veterinaria", "mascota", "pet", "animal"]]
+  ];
+
+  function normalizeSearchText(value) {
+    return String(value || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+  }
+
+  function detectCategoryFromText(text) {
+    const haystack = normalizeSearchText(text);
+    if (!haystack) return "Por clasificar";
+    for (const [category, keywords] of CATEGORY_RULES) {
+      if (keywords.some((keyword) => haystack.includes(normalizeSearchText(keyword)))) return category;
+    }
+    return "Por clasificar";
+  }
+
   const downloadTextFile = U.downloadTextFile || ((content, filename, mime = "text/plain;charset=utf-8") => {
     const blob = new Blob([content], { type: mime });
     const url = URL.createObjectURL(blob);
@@ -116,15 +163,16 @@
     comprasIndex: new Map(),
     tarjetasIndex: new Map(),
     movimientoConfirmandoId: null,
+    compraEditandoId: null,
+    dailyGmailSyncChecked: false,
 
     mes: null,
     idTarjeta: null,
     q: "",
 
     loading: false,
-    demo: true,
     backend: {
-      mode: "demo",
+      mode: "not_configured",
       reason: "",
       url: ""
     },
@@ -207,19 +255,17 @@
 
     if (backendState && typeof backendState === "object") {
       state.backend = {
-        mode: String(backendState.mode || "demo"),
+        mode: String(backendState.mode || "not_configured"),
         reason: String(backendState.reason || ""),
         url: String(backendState.url || "")
       };
-      state.demo = state.backend.mode === "demo";
       return;
     }
 
     const real = typeof API.isRealBackend === "function" ? API.isRealBackend() : false;
-    state.demo = !real;
     state.backend = {
-      mode: real ? "backend" : "demo",
-      reason: real ? "Backend activo" : "Modo demo",
+      mode: real ? "backend" : "not_configured",
+      reason: real ? "Backend activo" : "Backend sin configurar",
       url: ""
     };
   }
@@ -241,15 +287,14 @@
       mode === "apps_script" ? "Conectado a Apps Script" :
       mode === "backend" ? "Backend activo" :
       mode === "not_configured" ? "Backend sin configurar" :
-      "Modo demo";
+      "Backend sin configurar";
 
     const detail = state.backend.reason ? ` · ${state.backend.reason}` : "";
 
     for (const el of candidates) {
       el.textContent = `${text}${detail}`;
       el.dataset.mode = mode;
-      el.classList.toggle("is-demo", state.demo);
-      el.classList.toggle("is-live", !state.demo && mode !== "not_configured");
+      el.classList.toggle("is-live", mode !== "not_configured");
       el.classList.toggle("is-bad", mode === "not_configured");
     }
   }
@@ -332,6 +377,23 @@
     if (!modal) return;
     modal.setAttribute("aria-hidden", "true");
     document.body.style.overflow = "";
+  }
+
+  function renderCategoryDatalist() {
+    const datalist = $("#categoriasCompra");
+    if (!datalist) return;
+    datalist.innerHTML = CATEGORIAS_COMPRA
+      .map((category) => `<option value="${escapeHtml(category)}"></option>`)
+      .join("");
+  }
+
+  function suggestCategoryForCurrentForm(force = false) {
+    const descripcion = $("#descripcion");
+    const categoria = $("#categoria");
+    if (!descripcion || !categoria) return;
+    const current = String(categoria.value || "").trim();
+    if (!force && current && current !== "Por clasificar") return;
+    categoria.value = detectCategoryFromText(descripcion.value);
   }
 
   function openConfigModal() {
@@ -628,7 +690,6 @@
     const chunks = [`${items.length} cuota(s) en ${state.mes}`];
     if (state.idTarjeta) chunks.push("tarjeta filtrada");
     if (state.q) chunks.push(`búsqueda: "${state.q}"`);
-    if (state.demo) chunks.push("DEMO");
 
     hint.textContent = chunks.join(" · ");
   }
@@ -956,7 +1017,7 @@
       historyWrap.innerHTML = "";
       topCatsWrap.innerHTML = "";
       topCardsWrap.innerHTML = "";
-      if (hint) hint.textContent = state.demo ? "Últimos 12 meses · DEMO" : "Últimos 12 meses";
+      if (hint) hint.textContent = "Últimos 12 meses";
       return;
     }
 
@@ -1068,7 +1129,7 @@
       </div>
     `).join("");
 
-    if (hint) hint.textContent = state.demo ? "Últimos 12 meses · DEMO" : "Últimos 12 meses";
+    if (hint) hint.textContent = "Últimos 12 meses";
   }
 
 
@@ -1248,6 +1309,7 @@
   function openCompraFromMovimiento(mov) {
     resetCompraForm();
     state.movimientoConfirmandoId = mov.idMovimiento;
+    state.compraEditandoId = null;
 
     const modalTitle = $("#modalTitle");
     if (modalTitle) modalTitle.textContent = "Confirmar movimiento";
@@ -1258,7 +1320,7 @@
     if ($("#formTarjeta")) $("#formTarjeta").value = selectedCard;
     if ($("#fechaCompra")) $("#fechaCompra").value = fecha;
     if ($("#descripcion")) $("#descripcion").value = mov.comercio || mov.asunto || "Compra importada";
-    if ($("#categoria")) $("#categoria").value = "Por clasificar";
+    if ($("#categoria")) $("#categoria").value = detectCategoryFromText([mov.comercio, mov.asunto, mov.observaciones].join(" "));
     if ($("#total")) $("#total").value = Math.round(safeNum(mov.valor, 0));
     if ($("#cuotas")) $("#cuotas").value = 1;
     if ($("#mesInicio")) $("#mesInicio").value = String(fecha).slice(0, 7) || state.mes;
@@ -1266,6 +1328,29 @@
     if ($("#nota")) $("#nota").value = `Importado desde Gmail · ${mov.banco || "Banco"} · *${mov.tarjetaUltimos4 || "----"}`;
 
     applyAutoInterestToModal();
+    openModal();
+  }
+
+  function openCompraForEdit(compra) {
+    if (!compra) return;
+    resetCompraForm();
+    state.compraEditandoId = compra.idCompra;
+    state.movimientoConfirmandoId = null;
+
+    const modalTitle = $("#modalTitle");
+    if (modalTitle) modalTitle.textContent = "Editar compra";
+
+    if ($("#formTarjeta")) $("#formTarjeta").value = compra.idTarjeta || "";
+    if ($("#fechaCompra")) $("#fechaCompra").value = compra.FechaCompra || todayISO();
+    if ($("#descripcion")) $("#descripcion").value = compra.Descripcion || "";
+    if ($("#categoria")) $("#categoria").value = compra.Categoria || detectCategoryFromText(compra.Descripcion);
+    if ($("#total")) $("#total").value = Math.round(safeNum(compra.Total, 0));
+    if ($("#cuotas")) $("#cuotas").value = Math.max(1, Math.floor(safeNum(compra.Cuotas, 1)));
+    if ($("#mesInicio")) $("#mesInicio").value = compra.MesInicio || String(compra.FechaCompra || todayISO()).slice(0, 7);
+    if ($("#aplicarInteres")) $("#aplicarInteres").value = safeNum(compra.interesMensual, 0) > 0 ? "si" : "no";
+    if ($("#interesMensual")) $("#interesMensual").value = safeNum(compra.interesMensual, 0) || "";
+    if ($("#nota")) $("#nota").value = compra.Nota || "";
+
     openModal();
   }
 
@@ -1353,9 +1438,17 @@
         <td>${escapeHtml(fmtCOP(compra.Total))}</td>
         <td>${escapeHtml(String(compra.Cuotas || 1))}</td>
         <td><span class="pill info">${escapeHtml(compra.Estado || "Activa")}</span></td>
+        <td><button class="smallBtn" type="button" data-edit-compra="${escapeHtml(compra.idCompra)}">Editar</button></td>
       `;
       tbody.appendChild(tr);
     }
+
+    $$("[data-edit-compra]", tbody).forEach((btn) => {
+      btn.onclick = () => {
+        const idCompra = btn.getAttribute("data-edit-compra");
+        openCompraForEdit(state.comprasIndex.get(idCompra) || state.compras.find((c) => c.idCompra === idCompra));
+      };
+    });
 
     if (empty) empty.style.display = rows.length ? "none" : "block";
     if (hint) hint.textContent = `${rows.length} compra(s) en ${state.mes}`;
@@ -1365,7 +1458,11 @@
     const wrap = $("#gmailSyncStatus");
     if (!wrap) return;
     const s = state.gmailSyncStatus || {};
+    const daily = s.daily || {};
     const rows = [
+      ["Actualización diaria", daily.reason || "Sin revisión automática registrada"],
+      ["Se ejecutó hoy", daily.date === todayISO() ? "Sí" : "No"],
+      ["Resultado", daily.result || (daily.skipped === true ? "omitido" : daily.skipped === false ? "sincronizado" : "No disponible")],
       ["Última sincronización", s.lastSync || "No registrada"],
       ["Query usada", s.query || "No disponible"],
       ["Rango buscado", s.rangoFechas || "No disponible"],
@@ -1380,7 +1477,7 @@
     ];
 
     wrap.innerHTML = rows.map(([label, value], idx) => `
-      <div class="diagnosticItem ${idx === 1 || idx >= 9 ? "full" : ""}">
+      <div class="diagnosticItem ${idx === 0 || idx === 4 || idx >= 12 ? "full" : ""}">
         <strong>${escapeHtml(label)}</strong>
         <span>${escapeHtml(value)}</span>
       </div>
@@ -1458,11 +1555,59 @@
     }
   }
 
+  async function syncGmailOnceDailyOnOpen() {
+    if (state.dailyGmailSyncChecked || !API.isRealBackend?.()) return;
+    state.dailyGmailSyncChecked = true;
+
+    try {
+      const res = await API.post("syncGmailDiarioSiHaceFalta", {});
+      const data = res?.data || {};
+      if (data.status) {
+        state.gmailSyncStatus = {
+          ...data.status,
+          daily: {
+            skipped: data.skipped === true,
+            date: data.date || todayISO(),
+            reason: data.reason || "",
+            result: data.skipped ? "omitido" : "sincronizado"
+          }
+        };
+      }
+      toast(data.skipped ? "Gmail ya estaba actualizado hoy" : "Gmail actualizado al abrir", data.skipped ? "ℹ" : "✓");
+    } catch (err) {
+      const message = err?.message || "No se pudo revisar Gmail";
+      const endpointMissing = /acci[oó]n no v[aá]lida|syncGmailDiarioSiHaceFalta/i.test(message);
+      state.gmailSyncStatus = {
+        ...(state.gmailSyncStatus || {}),
+        daily: {
+          skipped: null,
+          date: todayISO(),
+          reason: endpointMissing
+            ? "El backend publicado todavÃ­a no tiene la sincronizaciÃ³n diaria automÃ¡tica"
+            : message,
+          result: endpointMissing ? "pendiente de despliegue" : "error"
+        }
+      };
+      if (!endpointMissing) {
+        toast("No se pudo sincronizar Gmail al abrir", "!");
+        console.warn("No se pudo ejecutar sync diario Gmail", err);
+      }
+    }
+  }
+
   /* -------------------------------------------------------------------------- */
   /* Events                                                                      */
   /* -------------------------------------------------------------------------- */
+  /*
+    Checks manuales Gmail:
+    - Confirmar movimiento con 1 cuota y validar Compras/Cuotas.
+    - Confirmar movimiento con 6 cuotas y validar seis filas en Cuotas.
+    - Confirmar cambiando categoria, total, tarjeta, fecha, mesInicio e interes.
+    - Editar esa compra y validar que no queden cuotas duplicadas para idCompra.
+  */
   function resetCompraForm() {
     state.movimientoConfirmandoId = null;
+    state.compraEditandoId = null;
 
     const modalTitle = $("#modalTitle");
     if (modalTitle) modalTitle.textContent = "Nueva compra";
@@ -1499,7 +1644,7 @@
     const btnNuevaCompra = $("#btnNuevaCompra");
     const btnCerrarModal = $("#btnCerrarModal");
     const btnCancelar = $("#btnCancelar");
-    const btnExportDemo = $("#btnExportDemo");
+    const btnExportCsv = $("#btnExportCsv");
     const btnOpenConfig = $("#btnOpenConfig");
     const btnCerrarConfig = $("#btnCerrarConfig");
     const btnResetConfig = $("#btnResetConfig");
@@ -1510,6 +1655,8 @@
     const toastClose = $("#toastClose");
     const movEstado = $("#movEstado");
     const movSearch = $("#movSearch");
+    const descripcion = $("#descripcion");
+    const categoria = $("#categoria");
 
     const onSearch = debounce(() => renderAll(), 140);
     const onMovSearch = debounce(() => renderMovimientosGmail(), 140);
@@ -1562,6 +1709,10 @@
 
     if (movEstado) movEstado.onchange = () => renderMovimientosGmail();
     if (movSearch) movSearch.addEventListener("input", onMovSearch);
+    if (descripcion) descripcion.addEventListener("input", () => suggestCategoryForCurrentForm(false));
+    if (categoria) categoria.addEventListener("blur", () => {
+      if (!categoria.value.trim()) suggestCategoryForCurrentForm(true);
+    });
 
     if (btnSync) btnSync.onclick = sync;
 
@@ -1572,10 +1723,16 @@
       };
     }
 
-    if (btnCerrarModal) btnCerrarModal.onclick = closeModal;
-    if (btnCancelar) btnCancelar.onclick = closeModal;
+    if (btnCerrarModal) btnCerrarModal.onclick = () => {
+      closeModal();
+      resetCompraForm();
+    };
+    if (btnCancelar) btnCancelar.onclick = () => {
+      closeModal();
+      resetCompraForm();
+    };
     if (aplicarInteres) aplicarInteres.onchange = () => applyAutoInterestToModal();
-    if (btnExportDemo) btnExportDemo.onclick = exportVisibleToCSV;
+    if (btnExportCsv) btnExportCsv.onclick = exportVisibleToCSV;
     if (btnOpenConfig) btnOpenConfig.onclick = openConfigModal;
     if (btnCerrarConfig) btnCerrarConfig.onclick = closeConfigModal;
 
@@ -1660,7 +1817,13 @@
           setLoading(btnGuardar, true);
           setLoadingGlobal(true);
 
-          if (state.movimientoConfirmandoId) {
+          if (state.compraEditandoId) {
+            await API.post("actualizarCompra", {
+              idCompra: state.compraEditandoId,
+              ...payload
+            });
+            toast("Compra actualizada", "âœ…");
+          } else if (state.movimientoConfirmandoId) {
             await API.post("confirmarMovimientoComoCompra", {
               idMovimiento: state.movimientoConfirmandoId,
               ...payload
@@ -1691,11 +1854,13 @@
     const authorized = Boolean(event?.detail?.authorized);
 
     if (!authorized) {
+      state.dailyGmailSyncChecked = false;
       resetDataAfterLogout();
       renderBackendStatus();
       return;
     }
 
+    await syncGmailOnceDailyOnOpen();
     await sync();
   });
 
@@ -1706,10 +1871,12 @@
     wireModalBackdrops();
     bindEvents();
     renderBackendStatus();
+    renderCategoryDatalist();
 
     const authorized = await waitForAuthorizedSession();
     if (!authorized) return;
 
+    await syncGmailOnceDailyOnOpen();
     await sync();
   });
 })();

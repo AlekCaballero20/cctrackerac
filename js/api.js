@@ -1,12 +1,12 @@
-// api.js — CC Tracker · Musicala (v2.0)
+﻿// api.js â€” CC Tracker Â· Musicala (v2.0)
 // Responsable de:
-// - Resolver configuración de backend sin humo
-// - Soportar 3 modos: proxy / apps_script / demo
-// - Normalizar GET/POST con timeout y errores útiles
+// - Resolver configuraciÃ³n de backend sin humo
+// - Soportar backend real por proxy o Apps Script
+// - Normalizar GET/POST con timeout y errores Ãºtiles
 // - Mantener API estable para app.js: window.CC_API.get/post/isRealBackend
-// - Exponer estado de backend para UI/diagnóstico
+// - Exponer estado de backend para UI/diagnÃ³stico
 //
-// Requiere utils.js si existe (window.CC_UTILS), pero no depende de él.
+// Requiere utils.js si existe (window.CC_UTILS), pero no depende de Ã©l.
 
 (() => {
   "use strict";
@@ -86,14 +86,13 @@
   }
 
   /* -------------------------------------------------------------------------- */
-  /* Configuración                                                               */
+  /* ConfiguraciÃ³n                                                               */
   /* -------------------------------------------------------------------------- */
   // Pueden sobreescribir esto ANTES de cargar api.js:
   // window.CC_RUNTIME_CONFIG = {
-  //   backendMode: "proxy", // "auto" | "proxy" | "apps_script" | "demo"
+  //   backendMode: "proxy", // "auto" | "proxy" | "apps_script"
   //   proxyUrl: "https://su-proxy.com/api/cc-tracker",
   //   appsScriptUrl: "https://script.google.com/macros/s/.../exec",
-  //   demoOnNetworkError: false,
   //   timeoutMs: 15000
   // };
 
@@ -101,9 +100,8 @@
     backendMode: "auto",
     proxyUrl: "",
     // Completar en js/firebase.config.js o mediante window.CC_RUNTIME_CONFIG.
-    appsScriptUrl: "",
-    apiToken: "", // legado opcional; la seguridad real ahora es Firebase Auth validado en Apps Script.
-    demoOnNetworkError: false,
+    appsScriptUrl: "https://script.google.com/macros/s/AKfycbysV7GraldQBWfa0OcBmz3k057AqbB6eeAxmUGJoN2Q0ux2gLIvyPBVrANoC87V-XREuA/exec",
+    apiToken: "cctrackerac", // legado opcional; la seguridad real ahora es Firebase Auth validado en Apps Script.
     timeoutMs: 15000
   };
 
@@ -130,7 +128,7 @@
     const raw = String(rawValue || "").trim();
     if (!raw) return "";
 
-    // Si accidentalmente pegaron varias URLs juntas, toma la primera válida.
+    // Si accidentalmente pegaron varias URLs juntas, toma la primera vÃ¡lida.
     const matches = raw.match(/https?:\/\/[^\s"]+/gi) || [];
     if (!matches.length) return "";
 
@@ -140,7 +138,7 @@
     const preferred = matches.find((url) => /\/(exec|dev)(\?|$)/i.test(url));
     if (preferred) selected = preferred;
 
-    // Limpia basura pegada después de /exec o /dev
+    // Limpia basura pegada despuÃ©s de /exec o /dev
     selected = selected.replace(/(\/exec|\/dev).*$/i, "$1");
 
     try {
@@ -159,12 +157,11 @@
     merged.appsScriptUrl = normalizeUrl(merged.appsScriptUrl);
     merged.backendMode = String(merged.backendMode || "auto").toLowerCase();
 
-    if (!["auto", "proxy", "apps_script", "demo"].includes(merged.backendMode)) {
+    if (!["auto", "proxy", "apps_script"].includes(merged.backendMode)) {
       merged.backendMode = "auto";
     }
 
     merged.timeoutMs = safeNum(merged.timeoutMs, DEFAULT_CONFIG.timeoutMs);
-    merged.demoOnNetworkError = Boolean(merged.demoOnNetworkError);
 
     return merged;
   }
@@ -188,7 +185,6 @@
       proxyUrl: RUNTIME_CONFIG.proxyUrl,
       appsScriptUrl: RUNTIME_CONFIG.appsScriptUrl,
       timeoutMs: RUNTIME_CONFIG.timeoutMs,
-      demoOnNetworkError: RUNTIME_CONFIG.demoOnNetworkError,
       hasFirebaseAuth: Boolean(window.CC_AUTH && typeof window.CC_AUTH.getIdToken === "function"),
       hasApiToken: Boolean(String(RUNTIME_CONFIG.apiToken || "").trim())
     };
@@ -209,14 +205,10 @@
     const hasProxy = Boolean(RUNTIME_CONFIG.proxyUrl);
     const hasAppsScript = Boolean(RUNTIME_CONFIG.appsScriptUrl);
 
-    if (mode === "demo") {
-      return { type: "demo", url: "", reason: "Modo demo forzado" };
-    }
-
     if (mode === "proxy") {
       return hasProxy
         ? { type: "proxy", url: RUNTIME_CONFIG.proxyUrl, reason: "Modo proxy" }
-        : { type: "demo", url: "", reason: "Modo proxy sin proxyUrl" };
+        : { type: "not_configured", url: "", reason: "Modo proxy sin proxyUrl" };
     }
 
     if (mode === "apps_script") {
@@ -227,11 +219,11 @@
 
     // auto
     if (hasProxy) {
-      return { type: "proxy", url: RUNTIME_CONFIG.proxyUrl, reason: "Auto → proxy" };
+      return { type: "proxy", url: RUNTIME_CONFIG.proxyUrl, reason: "Auto â†’ proxy" };
     }
 
     if (hasAppsScript) {
-      return { type: "apps_script", url: RUNTIME_CONFIG.appsScriptUrl, reason: "Auto → Apps Script" };
+      return { type: "apps_script", url: RUNTIME_CONFIG.appsScriptUrl, reason: "Auto â†’ Apps Script" };
     }
 
     return { type: "not_configured", url: "", reason: "Auto: backend sin configurar" };
@@ -243,10 +235,10 @@
   }
 
   /* -------------------------------------------------------------------------- */
-  /* Estado público                                                              */
+  /* Estado pÃºblico                                                              */
   /* -------------------------------------------------------------------------- */
   const PUBLIC_STATE = {
-    mode: "demo",
+    mode: "not_configured",
     reason: "",
     url: "",
     isLocalDev: isLikelyLocalDev(),
@@ -284,7 +276,7 @@
     const target = resolveBackendTarget();
 
     if (err?.name === "AbortError" || /aborted/i.test(rawMessage)) {
-      return createApiError("La petición tardó demasiado y fue cancelada.", {
+      return createApiError("La peticiÃ³n tardÃ³ demasiado y fue cancelada.", {
         code: "TIMEOUT",
         cause: err,
         context
@@ -294,13 +286,13 @@
     if (/failed to fetch/i.test(rawMessage)) {
       if (target.type === "apps_script" && isLikelyLocalDev()) {
         return createApiError(
-          "No se pudo conectar. Están intentando hablarle directo a Apps Script desde localhost/127.0.0.1 y eso suele estrellarse por CORS. Para desarrollo usen un proxy o dejen la app en demo mientras montamos ese puente.",
+          "No se pudo conectar. EstÃ¡n intentando hablarle directo a Apps Script desde localhost/127.0.0.1 y eso suele estrellarse por CORS. Para desarrollo usen un proxy o publiquen la app desde un origen permitido.",
           { code: "CORS_LOCALHOST_APPS_SCRIPT", cause: err, context }
         );
       }
 
       return createApiError(
-        "No se pudo conectar con el backend. Revisa la URL, la publicación del Web App/proxy y la configuración de acceso.",
+        "No se pudo conectar con el backend. Revisa la URL, la publicaciÃ³n del Web App/proxy y la configuraciÃ³n de acceso.",
         { code: "NETWORK_FETCH_FAILED", cause: err, context }
       );
     }
@@ -345,14 +337,14 @@
 
   async function resolveFirebaseIdToken() {
     if (!window.CC_AUTH || typeof window.CC_AUTH.getIdToken !== "function") {
-      throw createApiError("Firebase Auth no está cargado. Revisa que js/auth.js se esté cargando antes de usar la API.", {
+      throw createApiError("Firebase Auth no estÃ¡ cargado. Revisa que js/auth.js se estÃ© cargando antes de usar la API.", {
         code: "FIREBASE_AUTH_MISSING"
       });
     }
 
     const token = await window.CC_AUTH.getIdToken();
     if (!token) {
-      throw createApiError("No hay sesión Firebase válida. Inicia sesión otra vez.", {
+      throw createApiError("No hay sesiÃ³n Firebase vÃ¡lida. Inicia sesiÃ³n otra vez.", {
         code: "FIREBASE_TOKEN_MISSING"
       });
     }
@@ -363,10 +355,6 @@
   async function buildRequestDescriptor(method, paramsOrAction, payload) {
     const target = resolveBackendTarget();
     const token = String(RUNTIME_CONFIG.apiToken || "").trim();
-
-    if (target.type === "demo") {
-      return { target, url: "", options: null };
-    }
 
     if (!target.url) {
       throw createApiError("No hay URL de backend configurada.", { code: "BACKEND_URL_MISSING" });
@@ -406,7 +394,7 @@
 
     // apps_script
     // Apps Script + GitHub Pages: evitamos headers personalizados y mandamos TODO por POST
-    // con text/plain para no disparar preflight CORS. Sí, internet eligió este carnaval.
+    // con text/plain para no disparar preflight CORS. SÃ­, internet eligiÃ³ este carnaval.
     const firebaseIdToken = await resolveFirebaseIdToken();
     const legacyToken = String(RUNTIME_CONFIG.apiToken || "").trim();
 
@@ -453,7 +441,7 @@
       }
 
       throw createApiError(
-        `El backend respondió algo que no es JSON: ${rawText.slice(0, 180)}`,
+        `El backend respondiÃ³ algo que no es JSON: ${rawText.slice(0, 180)}`,
         { code: "INVALID_JSON_RESPONSE" }
       );
     }
@@ -478,12 +466,6 @@
       throw createApiError("Backend sin configurar. Revisa appsScriptUrl en js/firebase.config.js.", {
         code: "BACKEND_NOT_CONFIGURED"
       });
-    }
-
-    if (currentTarget.type === "demo") {
-      return method === "GET"
-        ? demoGet(paramsOrAction)
-        : demoPost(paramsOrAction, payload);
     }
 
     let descriptor;
@@ -520,7 +502,7 @@
 
       if (!normalized.ok) {
         throw createApiError(
-          normalized.error || normalized.message || "El backend respondió ok:false",
+          normalized.error || normalized.message || "El backend respondiÃ³ ok:false",
           {
             code: "BACKEND_NOT_OK",
             responsePayload: normalized
@@ -530,13 +512,6 @@
 
       return normalized;
     } catch (err) {
-      if (RUNTIME_CONFIG.demoOnNetworkError) {
-        console.warn("[CC_API] Error de red. Se activa fallback DEMO.", err);
-        return method === "GET"
-          ? demoGet(paramsOrAction)
-          : demoPost(paramsOrAction, payload);
-      }
-
       throw normalizeThrownError(err, { method, paramsOrAction });
     } finally {
       clear();
@@ -558,324 +533,6 @@
   }
 
   /* -------------------------------------------------------------------------- */
-  /* DEMO                                                                        */
-  /* -------------------------------------------------------------------------- */
-  function calcInterestForInstallment(base, interesMensual, installmentIndex, totalInstallments) {
-    const rate = safeNum(interesMensual, 0) / 100;
-    if (!(rate > 0)) return 0;
-
-    const total = Math.max(1, safeNum(totalInstallments, 1));
-    const idx = Math.max(1, safeNum(installmentIndex, 1));
-    const remaining = Math.max(1, total - idx + 1);
-    const estimatedBalance = base * (remaining + 0.5);
-    const interest = Math.round(estimatedBalance * rate);
-
-    return clamp(interest, 0, Math.round(base * 0.65));
-  }
-
-  function buildDemoDb() {
-    const tarjetas = [
-      { idTarjeta: "t1", Nombre: "Visa", Banco: "Banco Demo", Ultimos4: "0000", interesMensual: 2.6, activa: true },
-      { idTarjeta: "t2", Nombre: "Mastercard", Banco: "Banco Demo 2", Ultimos4: "1111", interesMensual: 2.1, activa: true },
-      { idTarjeta: "t3", Nombre: "Amex", Banco: "Banco Demo 3", Ultimos4: "2222", interesMensual: 3.0, activa: true }
-    ];
-
-    const compras = [
-      {
-        idCompra: "c1",
-        idTarjeta: "t1",
-        FechaCompra: `${addMonths(monthISO(), -2)}-09`,
-        Descripcion: "Mercado",
-        Categoria: "Comida",
-        Total: 120000,
-        Cuotas: 3,
-        MesInicio: addMonths(monthISO(), -2),
-        interesMensual: 0,
-        Nota: "Sin interés",
-        createdAt: `${todayISO()}T00:00:00`,
-        updatedAt: `${todayISO()}T00:00:00`
-      },
-      {
-        idCompra: "c2",
-        idTarjeta: "t1",
-        FechaCompra: `${addMonths(monthISO(), -1)}-12`,
-        Descripcion: "Gadget",
-        Categoria: "Tech",
-        Total: 300000,
-        Cuotas: 6,
-        MesInicio: addMonths(monthISO(), -1),
-        interesMensual: 2.6,
-        Nota: "Diferido con interés",
-        createdAt: `${todayISO()}T00:00:00`,
-        updatedAt: `${todayISO()}T00:00:00`
-      },
-      {
-        idCompra: "c3",
-        idTarjeta: "t2",
-        FechaCompra: `${monthISO()}-02`,
-        Descripcion: "Transporte",
-        Categoria: "Movilidad",
-        Total: 80000,
-        Cuotas: 2,
-        MesInicio: monthISO(),
-        interesMensual: 0,
-        Nota: "",
-        createdAt: `${todayISO()}T00:00:00`,
-        updatedAt: `${todayISO()}T00:00:00`
-      }
-    ];
-
-    const cuotas = [];
-
-    for (const compra of compras) {
-      const cuotasCount = Math.max(1, safeNum(compra.Cuotas, 1));
-      const base = Math.round(safeNum(compra.Total, 0) / cuotasCount);
-
-      for (let i = 1; i <= cuotasCount; i += 1) {
-        const interes = calcInterestForInstallment(base, compra.interesMensual, i, cuotasCount);
-
-        cuotas.push({
-          idCuota: `${compra.idCompra}-q${i}`,
-          idCompra: compra.idCompra,
-          idTarjeta: compra.idTarjeta,
-          Mes: addMonths(compra.MesInicio, i - 1),
-          NroCuota: i,
-          _cuotasTotal: cuotasCount,
-          BaseCuota: base,
-          InteresCuota: interes,
-          ValorCuota: base + interes,
-          Estado: "Pendiente",
-          FechaPago: "",
-          updatedAt: `${todayISO()}T00:00:00`
-        });
-      }
-    }
-
-    const paidIds = new Set([
-      `${compras[0].idCompra}-q1`,
-      `${compras[1].idCompra}-q1`
-    ]);
-
-    for (const cuota of cuotas) {
-      if (paidIds.has(cuota.idCuota)) {
-        cuota.Estado = "Pagada";
-        cuota.FechaPago = `${cuota.Mes}-08`;
-      }
-    }
-
-    const movimientosGmail = [
-      {
-        idMovimiento: "mg_demo_1",
-        gmailId: "gmail_demo_1",
-        threadId: "thread_demo_1",
-        fechaCorreo: `${todayISO()}T11:43:00`,
-        remitente: "Notificaciones Demo <demo@example.com>",
-        asunto: "Alerta Demo",
-        banco: "Banco Demo",
-        tipo: "compra",
-        comercio: "TIENDA DEMO",
-        valor: 123456,
-        moneda: "COP",
-        fechaMovimiento: todayISO(),
-        horaMovimiento: "11:43",
-        tarjetaUltimos4: "0000",
-        idTarjetaDetectada: "t1",
-        estado: "detectado",
-        confianza: 0.95,
-        idCompra: "",
-        observaciones: "Demo importado desde Gmail",
-        creadoEn: `${todayISO()}T11:43:00`,
-        actualizadoEn: `${todayISO()}T11:43:00`
-      }
-    ];
-
-    return { tarjetas, compras, cuotas, movimientosGmail };
-  }
-
-  const DEMO_DB = buildDemoDb();
-
-  async function demoGet(params = {}) {
-    const action = params?.action;
-
-    if (action === "listarTarjetas") {
-      return {
-        ok: true,
-        data: structuredCloneSafe(DEMO_DB.tarjetas.filter(t => t.activa !== false))
-      };
-    }
-
-    if (action === "listarMovimientosGmail") {
-      const estado = String(params?.estado || "").trim();
-      const mes = String(params?.mes || "").trim();
-      const idTarjeta = String(params?.idTarjeta || "").trim();
-
-      let rows = structuredCloneSafe(DEMO_DB.movimientosGmail || []);
-      if (estado) rows = rows.filter(m => String(m.estado || "") === estado);
-      if (mes) rows = rows.filter(m => String(m.fechaMovimiento || "").slice(0, 7) === mes);
-      if (idTarjeta) rows = rows.filter(m => String(m.idTarjetaDetectada || "") === idTarjeta);
-
-      return {
-        ok: true,
-        data: rows
-      };
-    }
-
-    if (action === "listarCuotas") {
-      const mes = String(params?.mes || "").trim();
-      const idTarjeta = String(params?.idTarjeta || "").trim();
-
-      let cuotas = structuredCloneSafe(DEMO_DB.cuotas);
-      let compras = structuredCloneSafe(DEMO_DB.compras);
-
-      if (mes) cuotas = cuotas.filter(c => String(c.Mes || "").slice(0, 7) === mes);
-      if (idTarjeta) cuotas = cuotas.filter(c => String(c.idTarjeta || "") === idTarjeta);
-
-      const idsCompra = new Set(cuotas.map(c => String(c.idCompra || "")).filter(Boolean));
-
-      if (idTarjeta) compras = compras.filter(c => String(c.idTarjeta || "") === idTarjeta);
-      if (idsCompra.size) compras = compras.filter(c => idsCompra.has(String(c.idCompra || "")));
-
-      return {
-        ok: true,
-        data: { cuotas, compras }
-      };
-    }
-
-    return {
-      ok: false,
-      error: `Acción demo GET no soportada: ${action || "(vacía)"}`
-    };
-  }
-
-  async function demoPost(action, payload = {}) {
-    if (action === "marcarCuotaPagada") {
-      const idCuota = String(payload?.idCuota || "").trim();
-      const fechaPago = String(payload?.fechaPago || "").trim() || todayISO();
-
-      if (!idCuota) {
-        return { ok: false, error: "Falta idCuota" };
-      }
-
-      const cuota = DEMO_DB.cuotas.find(item => String(item.idCuota) === idCuota);
-
-      if (!cuota) {
-        return { ok: false, error: "Cuota no encontrada" };
-      }
-
-      cuota.Estado = "Pagada";
-      cuota.FechaPago = fechaPago;
-      cuota.updatedAt = new Date().toISOString();
-
-      return {
-        ok: true,
-        data: { idCuota }
-      };
-    }
-
-    if (action === "crearCompra") {
-      const compra = {
-        idCompra: `c${DEMO_DB.compras.length + 1}`,
-        idTarjeta: String(payload?.idTarjeta || "").trim(),
-        FechaCompra: String(payload?.fechaCompra || "").trim(),
-        Descripcion: String(payload?.descripcion || "").trim(),
-        Categoria: String(payload?.categoria || "").trim(),
-        Total: safeNum(payload?.total, 0),
-        Cuotas: Math.max(1, safeNum(payload?.cuotas, 1)),
-        MesInicio: String(payload?.mesInicio || "").trim(),
-        interesMensual: safeNum(payload?.interesMensual, 0),
-        Nota: String(payload?.nota || "").trim(),
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-
-      if (!compra.idTarjeta) return { ok: false, error: "Falta idTarjeta" };
-      if (!compra.FechaCompra) return { ok: false, error: "Falta fechaCompra" };
-      if (!compra.Descripcion) return { ok: false, error: "Falta descripcion" };
-      if (!(compra.Total > 0)) return { ok: false, error: "Total debe ser > 0" };
-      if (!/^\d{4}-\d{2}$/.test(compra.MesInicio)) return { ok: false, error: "MesInicio debe ser YYYY-MM" };
-
-      DEMO_DB.compras.push(compra);
-
-      const base = Math.round(compra.Total / compra.Cuotas);
-
-      for (let i = 1; i <= compra.Cuotas; i += 1) {
-        const interes = calcInterestForInstallment(base, compra.interesMensual, i, compra.Cuotas);
-
-        DEMO_DB.cuotas.push({
-          idCuota: `${compra.idCompra}-q${i}`,
-          idCompra: compra.idCompra,
-          idTarjeta: compra.idTarjeta,
-          Mes: addMonths(compra.MesInicio, i - 1),
-          NroCuota: i,
-          _cuotasTotal: compra.Cuotas,
-          BaseCuota: base,
-          InteresCuota: interes,
-          ValorCuota: base + interes,
-          Estado: "Pendiente",
-          FechaPago: "",
-          updatedAt: new Date().toISOString()
-        });
-      }
-
-      return {
-        ok: true,
-        data: { idCompra: compra.idCompra }
-      };
-    }
-
-
-
-    if (action === "descartarMovimientoGmail") {
-      const idMovimiento = String(payload?.idMovimiento || "").trim();
-      const mov = DEMO_DB.movimientosGmail.find(item => String(item.idMovimiento) === idMovimiento);
-      if (!mov) return { ok: false, error: "Movimiento no encontrado" };
-      mov.estado = "descartado";
-      mov.observaciones = String(payload?.observaciones || "Descartado desde demo");
-      mov.actualizadoEn = new Date().toISOString();
-      return { ok: true, data: { idMovimiento } };
-    }
-
-    if (action === "confirmarMovimientoComoCompra") {
-      const idMovimiento = String(payload?.idMovimiento || "").trim();
-      const mov = DEMO_DB.movimientosGmail.find(item => String(item.idMovimiento) === idMovimiento);
-      if (!mov) return { ok: false, error: "Movimiento no encontrado" };
-      if (mov.estado === "confirmado") return { ok: false, error: "Este movimiento ya fue confirmado" };
-
-      const compraRes = await demoPost("crearCompra", {
-        idTarjeta: String(payload?.idTarjeta || mov.idTarjetaDetectada || ""),
-        fechaCompra: String(payload?.fechaCompra || mov.fechaMovimiento || todayISO()),
-        descripcion: String(payload?.descripcion || mov.comercio || "Compra importada"),
-        categoria: String(payload?.categoria || "Por clasificar"),
-        total: safeNum(payload?.total ?? mov.valor, 0),
-        cuotas: Math.max(1, safeNum(payload?.cuotas, 1)),
-        mesInicio: String(payload?.mesInicio || String(mov.fechaMovimiento || todayISO()).slice(0, 7)),
-        interesMensual: safeNum(payload?.interesMensual, 0),
-        nota: String(payload?.nota || `Importado desde Gmail · ${mov.banco}`)
-      });
-
-      if (!compraRes.ok) return compraRes;
-
-      mov.estado = "confirmado";
-      mov.idCompra = compraRes.data.idCompra;
-      mov.observaciones = "Confirmado como compra";
-      mov.actualizadoEn = new Date().toISOString();
-
-      return {
-        ok: true,
-        data: {
-          idMovimiento,
-          idCompra: compraRes.data.idCompra
-        }
-      };
-    }
-
-    return {
-      ok: false,
-      error: `Acción demo POST no soportada: ${action || "(vacía)"}`
-    };
-  }
-
-  /* -------------------------------------------------------------------------- */
   /* API pública                                                                 */
   /* -------------------------------------------------------------------------- */
   window.CC_API = {
@@ -894,3 +551,5 @@
     setRuntimeConfig
   };
 })();
+
+

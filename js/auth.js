@@ -203,7 +203,7 @@
       auth.onAuthStateChanged(async (user) => {
         const email = String(user?.email || "").trim().toLowerCase();
 
-        if (user && allowedEmails.includes(email) && user.emailVerified === true) {
+        if (user && allowedEmails.includes(email)) {
           currentUser = user;
           authorized = true;
           lastError = "";
@@ -212,14 +212,6 @@
           renderAuthUI();
           settleReady(true);
           dispatchAuthState();
-          return;
-        }
-
-        if (user && allowedEmails.includes(email) && user.emailVerified !== true) {
-          blockedEmailError = `El correo ${email || "sin email"} no está verificado en Firebase.`;
-          authorized = false;
-          currentUser = null;
-          await auth.signOut();
           return;
         }
 
